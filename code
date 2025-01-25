@@ -1,0 +1,59 @@
+import os
+import socket
+import platform
+from concurrent.futures import ThreadPoolExecutor
+import ipaddress
+
+# Function to ping an IP address
+def ping_ip(ip):
+    # Windows or Linux platform command
+    command = "ping -n 1" if platform.system().lower() == "windows" else "ping -c 1"
+    response = os.popen(f"{command} {ip}").read()
+    
+    # Check if response contains "TTL" (ping success)
+    if "TTL" in response:
+        try:
+            # Attempt to resolve IP to hostname
+            hostname = socket.gethostbyaddr(ip)[0]
+        except socket.herror:
+            hostname = "Unknown"
+        return ip, hostname
+    return None
+
+# Scan the local network for active devices
+def scan_network(network):
+    active_devices = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        results = executor.map(ping_ip, [str(ip) for ip in network.hosts()])
+        
+    for result in results:
+        if result:
+            active_devices.append(result)
+    return active_devices
+
+# Main function
+def main():
+    # Prompt for the IP address of the local device
+    local_ip = input("Enter the IP address of your local device (e.g., 192.168.1.10): ").strip()
+    
+    try:
+        # Convert local IP to a network object and calculate the network range
+        network = ipaddress.ip_network(local_ip, strict=False).network_address
+        network = ipaddress.ip_network(f"{network}/24", strict=False)
+        
+        print(f"Scanning network: {network}")
+        
+        active_devices = scan_network(network)
+        
+        if active_devices:
+            print("\nActive Devices Found:")
+            for ip, hostname in active_devices:
+                print(f"IP Address: {ip}, Hostname: {hostname}")
+        else:
+            print("No active devices found.")
+    
+    except ValueError:
+        print("Invalid IP address. Please make sure to enter a valid IP address.")
+        
+if __name__ == "__main__":
+    main()
